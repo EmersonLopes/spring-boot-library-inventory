@@ -4,13 +4,14 @@ import com.example.libraryeventsproducer.domain.LibraryEvent;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.log4j.Log4j2;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.SendResult;
 import org.springframework.stereotype.Component;
 import org.springframework.util.concurrent.ListenableFuture;
 import org.springframework.util.concurrent.ListenableFutureCallback;
+
+import java.util.concurrent.ExecutionException;
 
 @Log4j2
 @Component
@@ -38,6 +39,23 @@ public class LibraryEventProducer {
                 handleSucess(key, value, result);
             }
         });
+    }
+
+    public SendResult<Integer, String> sendLibraryEventSynchronous(LibraryEvent libraryEvent) throws JsonProcessingException, ExecutionException, InterruptedException {
+        Integer key = libraryEvent.getLibraryEventId();
+        String value = objectMapper.writeValueAsString(libraryEvent);
+
+        try {
+            SendResult<Integer, String> sendResult = kafkaTemplate.sendDefault(key, value).get();
+
+            return sendResult ;
+        } catch (ExecutionException | InterruptedException e){
+            log.error("ExecutionException/InterruptedException sending the message and the exception is {}", e.getMessage());
+            throw e;
+        } catch (Exception e) {
+            log.error("Exception sending the message and the exception is {}", e.getMessage());
+            throw e;
+        }
     }
 
     private void handleFailure(Integer key, String value, Throwable ex) {
