@@ -15,6 +15,9 @@ spring:
       bootstrap-servers: 172.25.10.49:9093
       key-serializer: org.apache.kafka.common.serialization.IntegerSerializer
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
+    admin:
+      properties:
+        bootstrap-servers: 172.25.10.49:9093
 ---
 spring:
   config:
