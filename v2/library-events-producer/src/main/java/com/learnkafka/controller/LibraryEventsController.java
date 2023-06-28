@@ -25,7 +25,8 @@ public class LibraryEventsController {
 
 
     @PostMapping("/v1/libraryevent")
-    public ResponseEntity<?> postLibraryEvent(@RequestBody LibraryEvent libraryEvent)
+    public ResponseEntity<?> postLibraryEvent(
+            @RequestBody LibraryEvent libraryEvent)
             throws JsonProcessingException, ExecutionException, InterruptedException, TimeoutException {
         log.info("libraryEvent: {}", libraryEvent);
         // invoke the kafka producer
