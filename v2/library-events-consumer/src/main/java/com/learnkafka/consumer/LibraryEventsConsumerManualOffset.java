@@ -8,7 +8,7 @@ import org.springframework.kafka.listener.AcknowledgingConsumerAwareMessageListe
 import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.stereotype.Component;
 
-@Component
+//@Component
 @Log4j2
 public class LibraryEventsConsumerManualOffset implements AcknowledgingConsumerAwareMessageListener<Integer, String> {
 
