@@ -12,6 +12,8 @@ spring:
       on-profile: local
 
   kafka:
+    template:
+      default-topic: library-events
     consumer:
       group-id: library-events-listener-group
       bootstrap-servers: localhost:9092,localhost:9093,localhost:9094
