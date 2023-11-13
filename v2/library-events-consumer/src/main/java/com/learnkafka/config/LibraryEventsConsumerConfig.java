@@ -1,5 +1,6 @@
 package com.learnkafka.config;
 
+import lombok.extern.log4j.Log4j2;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.kafka.ConcurrentKafkaListenerContainerFactoryConfigurer;
@@ -17,6 +18,7 @@ import org.springframework.util.backoff.FixedBackOff;
 
 import java.util.Objects;
 
+@Log4j2
 @Configuration
 @EnableKafka
 public class LibraryEventsConsumerConfig {
@@ -24,7 +26,12 @@ public class LibraryEventsConsumerConfig {
     public DefaultErrorHandler errorHandler(){
         var fixedBackOff = new FixedBackOff(1000L, 2);
 
-        return new DefaultErrorHandler(fixedBackOff);
+        DefaultErrorHandler errorHandler = new DefaultErrorHandler(fixedBackOff);
+        errorHandler.setRetryListeners((consumerRecord, e, i) -> {
+            log.info("Failed Record in Retry Listener, Exception : {}, deliveryAttempty : {}", e.getMessage(), i);
+        });
+
+        return errorHandler;
     }
 
     @Bean
