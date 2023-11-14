@@ -6,6 +6,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.autoconfigure.kafka.ConcurrentKafkaListenerContainerFactoryConfigurer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.dao.RecoverableDataAccessException;
 import org.springframework.kafka.annotation.EnableKafka;
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.config.ContainerCustomizer;
@@ -16,6 +17,7 @@ import org.springframework.kafka.listener.ContainerProperties;
 import org.springframework.kafka.listener.DefaultErrorHandler;
 import org.springframework.util.backoff.FixedBackOff;
 
+import java.util.List;
 import java.util.Objects;
 
 @Log4j2
@@ -24,9 +26,15 @@ import java.util.Objects;
 public class LibraryEventsConsumerConfig {
 
     public DefaultErrorHandler errorHandler(){
+
+        var exceptionsToIgnoreList = List.of(IllegalArgumentException.class);
+        var exceptionsToRetryList = List.of(RecoverableDataAccessException.class);
+
         var fixedBackOff = new FixedBackOff(1000L, 2);
 
         DefaultErrorHandler errorHandler = new DefaultErrorHandler(fixedBackOff);
+//        exceptionsToIgnoreList.forEach(errorHandler::addNotRetryableExceptions);
+        exceptionsToRetryList.forEach(errorHandler::addRetryableExceptions);
         errorHandler.setRetryListeners((consumerRecord, e, i) -> {
             log.info("Failed Record in Retry Listener, Exception : {}, deliveryAttempty : {}", e.getMessage(), i);
         });

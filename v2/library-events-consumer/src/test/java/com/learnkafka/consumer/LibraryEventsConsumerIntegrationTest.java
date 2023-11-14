@@ -167,4 +167,30 @@ public class LibraryEventsConsumerIntegrationTest {
         Mockito.verify(libraryEventServiceSpy, Mockito.times(3)).processLibraryEvent(isA(ConsumerRecord.class));
 
     }
+
+    @Test
+    public void publishUpdateLibraryEvent_999_LibraryEvent() throws JsonProcessingException, InterruptedException {
+        // given
+        String json = "{\n" +
+                "    \"libraryEventId\" : null,\n" +
+                "    \"libraryEventType\": \"UPDATE\",\n" +
+                "    \"book\" : {\n" +
+                "       \"bookId\" : 456,\n" +
+                "       \"bookName\" : \"Kafka Using Spring Boot\",\n" +
+                "       \"bookAuthor\" : \"Dilip\" \n" +
+                "    }\n" +
+                "}";
+
+
+        kafkaTemplate.sendDefault(json);
+
+        // when
+        CountDownLatch countDownLatch = new CountDownLatch(1);
+        countDownLatch.await(3, TimeUnit.SECONDS);
+
+        // then
+        Mockito.verify(libraryEventsConsumerSpy, Mockito.times(3)).onMessage(isA(ConsumerRecord.class));
+        Mockito.verify(libraryEventServiceSpy, Mockito.times(3)).processLibraryEvent(isA(ConsumerRecord.class));
+
+    }
 }
