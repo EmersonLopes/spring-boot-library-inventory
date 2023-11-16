@@ -186,7 +186,7 @@ public class LibraryEventsConsumerIntegrationTest {
 
         // when
         CountDownLatch countDownLatch = new CountDownLatch(1);
-        countDownLatch.await(3, TimeUnit.SECONDS);
+        countDownLatch.await(5, TimeUnit.SECONDS);
 
         // then
         Mockito.verify(libraryEventsConsumerSpy, Mockito.times(3)).onMessage(isA(ConsumerRecord.class));
