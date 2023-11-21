@@ -8,23 +8,31 @@ import com.learnkafka.entity.LibraryEventType;
 import com.learnkafka.jpa.LibraryEventRepository;
 import com.learnkafka.service.LibraryEventService;
 import lombok.SneakyThrows;
+import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.common.serialization.IntegerDeserializer;
+import org.apache.kafka.common.serialization.StringDeserializer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.SpyBean;
 import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
+import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.listener.MessageListenerContainer;
 import org.springframework.kafka.test.EmbeddedKafkaBroker;
 import org.springframework.kafka.test.context.EmbeddedKafka;
 import org.springframework.kafka.test.utils.ContainerTestUtils;
+import org.springframework.kafka.test.utils.KafkaTestUtils;
 import org.springframework.test.context.TestPropertySource;
 
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
@@ -34,7 +42,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.isA;
 
 @SpringBootTest
-@EmbeddedKafka(topics = "library-events")
+@EmbeddedKafka(topics = {"library-events", "library-events.RETRY", "library-events.DLT"})
 @TestPropertySource(properties = {"spring.kafka.producer.bootstrap-servers=${spring.embedded.kafka.brokers}",
         "spring.kafka.admin.properties.bootstrap-servers=${spring.embedded.kafka.brokers}",
         "spring.kafka.consumer.bootstrap-servers=${spring.embedded.kafka.brokers}"})
@@ -60,6 +68,14 @@ public class LibraryEventsConsumerIntegrationTest {
 
     @Autowired
     ObjectMapper objectMapper;
+
+    @Value("${topics.retry}")
+    private String retryTopic;
+
+    @Value("${topics.dlt}")
+    private String deadLetterTopic;
+
+    private Consumer<Integer, String> consumer;
 
     @BeforeEach
     void setup(){
@@ -172,7 +188,7 @@ public class LibraryEventsConsumerIntegrationTest {
     public void publishUpdateLibraryEvent_999_LibraryEvent() throws JsonProcessingException, InterruptedException {
         // given
         String json = "{\n" +
-                "    \"libraryEventId\" : null,\n" +
+                "    \"libraryEventId\" : 999,\n" +
                 "    \"libraryEventType\": \"UPDATE\",\n" +
                 "    \"book\" : {\n" +
                 "       \"bookId\" : 456,\n" +
@@ -191,6 +207,14 @@ public class LibraryEventsConsumerIntegrationTest {
         // then
         Mockito.verify(libraryEventsConsumerSpy, Mockito.times(3)).onMessage(isA(ConsumerRecord.class));
         Mockito.verify(libraryEventServiceSpy, Mockito.times(3)).processLibraryEvent(isA(ConsumerRecord.class));
+
+        HashMap<String, Object> configs = new HashMap<>(KafkaTestUtils.consumerProps("group1", "true", embeddedKafkaBroker));
+        consumer = new DefaultKafkaConsumerFactory<>(configs, new IntegerDeserializer(), new StringDeserializer()).createConsumer();
+        embeddedKafkaBroker.consumeFromAnEmbeddedTopic(consumer, retryTopic);
+
+        ConsumerRecord<Integer, String> consumerRecord = KafkaTestUtils.getSingleRecord(consumer, retryTopic);
+        System.out.println("ConsumerRecord is: " + consumerRecord.value());
+        assertEquals(json, consumerRecord.value());
 
     }
 }

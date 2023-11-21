@@ -1,32 +1,56 @@
 package com.learnkafka.config;
 
 import lombok.extern.log4j.Log4j2;
-import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.apache.kafka.common.TopicPartition;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.kafka.ConcurrentKafkaListenerContainerFactoryConfigurer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.dao.RecoverableDataAccessException;
 import org.springframework.kafka.annotation.EnableKafka;
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
-import org.springframework.kafka.config.ContainerCustomizer;
 import org.springframework.kafka.core.ConsumerFactory;
-import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
-import org.springframework.kafka.listener.ConcurrentMessageListenerContainer;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.listener.ContainerProperties;
+import org.springframework.kafka.listener.DeadLetterPublishingRecoverer;
 import org.springframework.kafka.listener.DefaultErrorHandler;
 import org.springframework.kafka.support.ExponentialBackOffWithMaxRetries;
 import org.springframework.util.backoff.FixedBackOff;
 
 import java.util.List;
-import java.util.Objects;
 
 @Log4j2
 @Configuration
 @EnableKafka
 public class LibraryEventsConsumerConfig {
 
-    public DefaultErrorHandler errorHandler(){
+    @Autowired
+    KafkaTemplate kafkaTemplate;
+
+    @Value("${topics.retry}")
+    private String retryTopic;
+
+    @Value("${topics.dlt}")
+    private String deadLetterTopic;
+
+    public DeadLetterPublishingRecoverer publishingRecoverer() {
+
+
+        return new DeadLetterPublishingRecoverer(kafkaTemplate,
+
+                (consumerRecord, e) -> {
+                    if (e.getCause() instanceof RecoverableDataAccessException) {
+                        return new TopicPartition(retryTopic, consumerRecord.partition());
+                    } else {
+                        return new TopicPartition(deadLetterTopic, consumerRecord.partition());
+                    }
+                });
+
+
+    }
+
+    public DefaultErrorHandler errorHandler() {
 
         var exceptionsToIgnoreList = List.of(IllegalArgumentException.class);
         var exceptionsToRetryList = List.of(RecoverableDataAccessException.class);
@@ -38,6 +62,7 @@ public class LibraryEventsConsumerConfig {
         expBackOff.setMaxInterval(2_000L);
 
         DefaultErrorHandler errorHandler = new DefaultErrorHandler(
+                publishingRecoverer(),
 //                fixedBackOff
                 expBackOff
         );
