@@ -1,6 +1,8 @@
 package com.learnkafka.config;
 
+import com.learnkafka.service.FailureService;
 import lombok.extern.log4j.Log4j2;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -12,6 +14,7 @@ import org.springframework.kafka.annotation.EnableKafka;
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.core.ConsumerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.listener.ConsumerRecordRecoverer;
 import org.springframework.kafka.listener.ContainerProperties;
 import org.springframework.kafka.listener.DeadLetterPublishingRecoverer;
 import org.springframework.kafka.listener.DefaultErrorHandler;
@@ -25,8 +28,14 @@ import java.util.List;
 @EnableKafka
 public class LibraryEventsConsumerConfig {
 
+    private static final String RETRY = "RETRY";
+    private static final String DEAD = "DEAD";
+
     @Autowired
     KafkaTemplate kafkaTemplate;
+
+    @Autowired
+    private FailureService failureService;
 
     @Value("${topics.retry}")
     private String retryTopic;
@@ -34,12 +43,15 @@ public class LibraryEventsConsumerConfig {
     @Value("${topics.dlt}")
     private String deadLetterTopic;
 
+
+
     public DeadLetterPublishingRecoverer publishingRecoverer() {
 
 
         return new DeadLetterPublishingRecoverer(kafkaTemplate,
 
                 (consumerRecord, e) -> {
+                    log.error("Exception in publishingRecoverer : {} ", e.getMessage(), e);
                     if (e.getCause() instanceof RecoverableDataAccessException) {
                         return new TopicPartition(retryTopic, consumerRecord.partition());
                     } else {
@@ -49,6 +61,20 @@ public class LibraryEventsConsumerConfig {
 
 
     }
+
+    ConsumerRecordRecoverer consumerRecordRecoverer = (record, exception) -> {
+        log.error("Exception is : {} Failed Record : {} ", exception, record);
+        if (exception.getCause() instanceof RecoverableDataAccessException) {
+            log.info("Inside the recoverable logic");
+            //Add any Recovery Code here.
+            failureService.saveFailedRecord((ConsumerRecord<Integer, String>) record, exception, RETRY);
+
+        } else {
+            log.info("Inside the non recoverable logic and skipping the record : {}", record);
+            failureService.saveFailedRecord((ConsumerRecord<Integer, String>) record, exception, DEAD);
+
+        }
+    };
 
     public DefaultErrorHandler errorHandler() {
 
@@ -62,13 +88,14 @@ public class LibraryEventsConsumerConfig {
         expBackOff.setMaxInterval(2_000L);
 
         DefaultErrorHandler errorHandler = new DefaultErrorHandler(
-                publishingRecoverer(),
-//                fixedBackOff
-                expBackOff
+//                publishingRecoverer(),
+                consumerRecordRecoverer,
+                fixedBackOff
+//                expBackOff
         );
 
-//        exceptionsToIgnoreList.forEach(errorHandler::addNotRetryableExceptions);
-        exceptionsToRetryList.forEach(errorHandler::addRetryableExceptions);
+        exceptionsToIgnoreList.forEach(errorHandler::addNotRetryableExceptions);
+//        exceptionsToRetryList.forEach(errorHandler::addRetryableExceptions);
         errorHandler.setRetryListeners((consumerRecord, e, i) -> {
             log.info("Failed Record in Retry Listener, Exception : {}, deliveryAttempty : {}", e.getMessage(), i);
         });
@@ -82,8 +109,8 @@ public class LibraryEventsConsumerConfig {
             ConsumerFactory<Object, Object> kafkaConsumerFactory) {
         ConcurrentKafkaListenerContainerFactory<Object, Object> factory = new ConcurrentKafkaListenerContainerFactory();
         configurer.configure(factory, kafkaConsumerFactory);
-        factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.MANUAL);
-        factory.setConcurrency(3);
+//        factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.MANUAL);
+//        factory.setConcurrency(3);
         factory.setCommonErrorHandler(errorHandler());
         return factory;
     }
