@@ -28,8 +28,9 @@ import java.util.List;
 @EnableKafka
 public class LibraryEventsConsumerConfig {
 
-    private static final String RETRY = "RETRY";
-    private static final String DEAD = "DEAD";
+    public static final String RETRY = "RETRY";
+    public static final String DEAD = "DEAD";
+    public static final String SUCCESS = "SUCCESS";
 
     @Autowired
     KafkaTemplate kafkaTemplate;
